@@ -60,7 +60,7 @@ io.on("connection", (socket) => {
 
   socket.on("chat message", (msg) => {
     console.log("io.emit", msg);
-    io.emit("chat message", msg);
+    io.emit("chat message", msg, socket.id);
   });
 
   socket.on("ready", (roomId) => {
@@ -68,15 +68,14 @@ io.on("connection", (socket) => {
     if (rooms[roomId] !== undefined) {
       rooms[roomId][socket.id] = { ...rooms[roomId][socket.id], ready: true };
       let allReady = true;
-      for (const user in rooms[roomId]) {
-        console.log("rooms[roomId][user]", rooms[roomId][user]);
-        if (rooms[roomId][user]?.ready !== true) {
-          allReady = false;
+      for (const roomId in rooms) {
+        for (const user in rooms[roomId]) {
+          if (rooms[roomId][user]?.ready !== true) {
+            allReady = false;
+          }
         }
-
         break;
       }
-      console.log("allReady", allReady);
       if (allReady) {
         io.emit("game start");
       }
