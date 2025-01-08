@@ -38,6 +38,11 @@ io.on("connection", (socket) => {
             Object.keys(rooms[roomId]).length,
             gameSize
           );
+        const userList = [];
+        for (const [key, value] of Object.entries(rooms[roomId])) {
+          userList.push({ id: key, name: value.name, answer: "" });
+        }
+        io.emit("user update", userList);
         console.log(`${socket.id} joined Room ${roomId}`);
         roomFound = true;
         break;
@@ -51,6 +56,9 @@ io.on("connection", (socket) => {
       // rooms[newRoomId] = [{ id: socket.id, name: userName }];
       socket.join(newRoomId);
       socket.emit("roomJoined", socket.id, newRoomId, 1, gameSize);
+      socket.emit("user update", [
+        { id: socket.id, name: userName, answer: "" },
+      ]);
       console.log(`${socket.id} created and joined Room ${newRoomId}`);
     }
 
@@ -58,9 +66,9 @@ io.on("connection", (socket) => {
     console.log("rooms", rooms);
   });
 
-  socket.on("chat message", (msg) => {
+  socket.on("chat message", (msg, userName) => {
     console.log("io.emit", msg);
-    io.emit("chat message", msg, socket.id);
+    io.emit("chat message", msg, socket.id, userName);
   });
 
   socket.on("ready", (roomId) => {
@@ -96,6 +104,12 @@ io.on("connection", (socket) => {
       delete rooms[roomId][socket.id];
       if (Object.keys(rooms[roomId]).length === 0) {
         delete rooms[roomId]; // 빈 방 삭제
+      } else {
+        const userList = [];
+        for (const [key, value] of Object.entries(rooms[roomId])) {
+          userList.push({ id: key, name: value.name, answer: "" });
+        }
+        io.emit("user update", userList);
       }
       console.log("rooms", rooms);
     }
