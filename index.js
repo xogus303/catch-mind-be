@@ -71,6 +71,25 @@ io.on("connection", (socket) => {
     io.emit("chat message", msg, socket.id, userName);
   });
 
+  socket.on("select userType", (roomId, type) => {
+    console.log("select userType roomId", roomId, rooms[roomId]);
+    if (rooms[roomId] !== undefined) {
+      if (type === "master") {
+        io.emit("update master user", rooms[roomId][socket.id].name);
+      } else {
+        for (const user in rooms[roomId]) {
+          console.log("user", user);
+          if (user === socket.id && rooms[roomId][user].type === "master") {
+            io.emit("update master user", null);
+            break;
+          }
+        }
+      }
+      rooms[roomId][socket.id] = { ...rooms[roomId][socket.id], type };
+    }
+    console.log("select userType result", rooms[roomId]);
+  });
+
   socket.on("ready", (roomId) => {
     console.log("ready roomId", roomId, rooms[roomId]);
     if (rooms[roomId] !== undefined) {
@@ -88,6 +107,7 @@ io.on("connection", (socket) => {
         io.emit("game start");
       }
     }
+    console.log("ready result", rooms[roomId]);
   });
 
   socket.on("disconnect", () => {
