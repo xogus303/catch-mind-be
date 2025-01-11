@@ -10,17 +10,53 @@ const io = new Server(server, {
   },
 });
 
-const gameSize = 2;
+const gameSize = 3;
 let rooms = {}; // {roomId: [{id: '', name: '', ready?: false}, user2], roomId: [user3, user4]}
 
 io.on("connection", (socket) => {
   // 유저 입장
-  socket.on("joinRandomRoom", (userName) => {
+  socket.on("joinRandomRoom", (userName, userType) => {
     let roomFound = false;
     // 1. 기존 방에 여유 공간 있는지 확인
     for (const roomId in rooms) {
-      if (Object.keys(rooms[roomId]).length < 2) {
-        rooms[roomId] = { ...rooms[roomId], [socket.id]: { name: userName } };
+      console.log("rooms[roomId]", rooms[roomId]);
+      if (Object.keys(rooms[roomId]).length < gameSize) {
+        // 출제자 타입인 경우 방에 출제자가 없는지 체크
+        if (userType === "master") {
+          console.log("join master");
+          let hasSmaeType = false;
+          for (const [key, value] of Object.entries(rooms[roomId])) {
+            if (value.type === userType) hasSmaeType = true;
+            break;
+          }
+          if (hasSmaeType) {
+            break;
+          }
+        } else {
+          console.log("join taker");
+          // 문제 풀이자의 경우 출제자 자리를 제외한 인원수로 입장가능 여부 체크
+          if (gameSize - Object.keys(rooms[roomId]).length < 2) {
+            console.log("left only one");
+            // 2인이상 자리가 있는 경우 문제풀이자는 항상 해당 룸 입장 가능
+            let hasMaster = false;
+            for (const [key, value] of Object.entries(rooms[roomId])) {
+              if (value.type === "master") {
+                hasMaster = true;
+              }
+              break;
+            }
+            console.log("hasMaster", hasMaster);
+            if (hasMaster === false) {
+              // 남은 1자리가 제출자면 다음방 조회
+              continue;
+            }
+          }
+        }
+
+        rooms[roomId] = {
+          ...rooms[roomId],
+          [socket.id]: { name: userName, type: userType },
+        };
         // rooms[roomId].push({ id: socket.id, name: userName });
         socket.join(roomId);
         socket.emit(
@@ -40,58 +76,40 @@ io.on("connection", (socket) => {
           );
         const userList = [];
         for (const [key, value] of Object.entries(rooms[roomId])) {
-          userList.push({ id: key, name: value.name, answer: "" });
+          userList.push({
+            id: key,
+            name: value.name,
+            type: value.type,
+            answer: "",
+          });
         }
-        io.emit("user update", userList);
-        console.log(`${socket.id} joined Room ${roomId}`);
+        io.to(roomId).emit("user update", userList);
         roomFound = true;
+        console.log("roomFound");
         break;
       }
     }
 
     // 2. 빈 방이 없으면 새 방 생성
     if (!roomFound) {
+      console.log("no roomFound");
       const newRoomId = `room-${Object.keys(rooms).length + 1}`;
-      rooms[newRoomId] = { [socket.id]: { name: userName } };
+      rooms[newRoomId] = { [socket.id]: { name: userName, type: userType } };
       // rooms[newRoomId] = [{ id: socket.id, name: userName }];
       socket.join(newRoomId);
       socket.emit("roomJoined", socket.id, newRoomId, 1, gameSize);
       socket.emit("user update", [
-        { id: socket.id, name: userName, answer: "" },
+        { id: socket.id, name: userName, type: userType, answer: "" },
       ]);
-      console.log(`${socket.id} created and joined Room ${newRoomId}`);
     }
-
-    console.log("roomFound", roomFound);
-    console.log("rooms", rooms);
+    console.log("joinRandomRoom rooms", rooms);
   });
 
-  socket.on("chat message", (msg, userName) => {
-    console.log("io.emit", msg);
-    io.emit("chat message", msg, socket.id, userName);
-  });
-
-  socket.on("select userType", (roomId, type) => {
-    console.log("select userType roomId", roomId, rooms[roomId]);
-    if (rooms[roomId] !== undefined) {
-      if (type === "master") {
-        io.emit("update master user", rooms[roomId][socket.id].name);
-      } else {
-        for (const user in rooms[roomId]) {
-          console.log("user", user);
-          if (user === socket.id && rooms[roomId][user].type === "master") {
-            io.emit("update master user", null);
-            break;
-          }
-        }
-      }
-      rooms[roomId][socket.id] = { ...rooms[roomId][socket.id], type };
-    }
-    console.log("select userType result", rooms[roomId]);
+  socket.on("chat message", (roomId, msg, userName) => {
+    io.to(roomId).emit("chat message", msg, socket.id, userName);
   });
 
   socket.on("ready", (roomId) => {
-    console.log("ready roomId", roomId, rooms[roomId]);
     if (rooms[roomId] !== undefined) {
       rooms[roomId][socket.id] = { ...rooms[roomId][socket.id], ready: true };
       let allReady = true;
@@ -104,38 +122,53 @@ io.on("connection", (socket) => {
         break;
       }
       if (allReady) {
-        io.emit("game start");
+        socket.to(roomId).emit("game start");
       }
     }
-    console.log("ready result", rooms[roomId]);
   });
 
   socket.on("disconnect", () => {
-    console.log("user disconnected");
-
+    console.log("disconnect socket.id:", socket.id);
+    console.log("disconnect rooms", rooms);
     for (const roomId in rooms) {
+      console.log(
+        "rooms[roomId].hasOwnProperty(socket.id)",
+        rooms[roomId].hasOwnProperty(socket.id)
+      );
+      if (!rooms[roomId].hasOwnProperty(socket.id)) continue;
       const leaveUser = rooms[roomId][socket.id];
       console.log("leaveUser", leaveUser);
-      if (leaveUser !== undefined && Object.keys(rooms[roomId]).length === 2) {
-        socket
-          .to(roomId)
-          .emit("leave", leaveUser.name, Object.keys(rooms[roomId]).length - 1);
-      }
       delete rooms[roomId][socket.id];
+      console.log("leaveUser", leaveUser);
       if (Object.keys(rooms[roomId]).length === 0) {
         delete rooms[roomId]; // 빈 방 삭제
       } else {
+        if (
+          leaveUser !== undefined &&
+          Object.keys(rooms[roomId]).length < gameSize
+        ) {
+          io.to(roomId).emit(
+            "leave",
+            leaveUser.name,
+            Object.keys(rooms[roomId]).length - 1,
+            gameSize
+          );
+        }
         const userList = [];
         for (const [key, value] of Object.entries(rooms[roomId])) {
-          userList.push({ id: key, name: value.name, answer: "" });
+          console.log("key", key);
+          console.log("value", value);
+          userList.push({
+            id: key,
+            name: value.name,
+            type: value.type,
+            answer: "",
+          });
         }
-        io.emit("user update", userList);
+        io.to(roomId).emit("user update", userList);
       }
-      console.log("rooms", rooms);
     }
   });
 });
 
-server.listen(3001, () => {
-  console.log("server running at http://localhost:3001");
-});
+server.listen(3001, () => {});
