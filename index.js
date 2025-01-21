@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { fetchWord } from "./getRandomWord.js";
 
 const app = express();
 const server = createServer(app);
@@ -8,12 +9,21 @@ const io = new Server(server, {
   cors: {
     origin: "http://localhost:3000",
   },
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 5000,
+  },
 });
 
-const gameSize = 3;
+const gameSize = 2;
 let rooms = {}; // {roomId: [{id: '', name: '', ready?: false}, user2], roomId: [user3, user4]}
-
+console.log("rooms", rooms);
 io.on("connection", (socket) => {
+  if (socket.recovered) {
+    console.log("is recovered");
+  } else {
+    console.log("is not Recovered");
+  }
+
   // 유저 입장
   socket.on("joinRandomRoom", (userName, userType) => {
     let roomFound = false;
@@ -33,10 +43,8 @@ io.on("connection", (socket) => {
             break;
           }
         } else {
-          console.log("join taker");
           // 문제 풀이자의 경우 출제자 자리를 제외한 인원수로 입장가능 여부 체크
           if (gameSize - Object.keys(rooms[roomId]).length < 2) {
-            console.log("left only one");
             // 2인이상 자리가 있는 경우 문제풀이자는 항상 해당 룸 입장 가능
             let hasMaster = false;
             for (const [key, value] of Object.entries(rooms[roomId])) {
@@ -45,7 +53,6 @@ io.on("connection", (socket) => {
               }
               break;
             }
-            console.log("hasMaster", hasMaster);
             if (hasMaster === false) {
               // 남은 1자리가 제출자면 다음방 조회
               continue;
@@ -121,8 +128,13 @@ io.on("connection", (socket) => {
         }
         break;
       }
+      console.log("allReady", allReady);
       if (allReady) {
-        socket.to(roomId).emit("game start");
+        io.to(roomId).emit("loading start");
+        fetchWord().then((res) => {
+          console.log("fetchWord res", res);
+        });
+        // io.to(roomId).emit("game start");
       }
     }
   });
@@ -172,3 +184,6 @@ io.on("connection", (socket) => {
 });
 
 server.listen(3001, () => {});
+server.on("close", () => {
+  console.log("server close. rooms", rooms);
+});
