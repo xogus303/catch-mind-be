@@ -16,7 +16,9 @@ const io = new Server(server, {
 
 const gameSize = 2;
 let rooms = {}; // {roomId: [{id: '', name: '', ready?: false}, user2], roomId: [user3, user4]}
+let words = {}; // {[roomId]: ''}
 console.log("rooms", rooms);
+console.log("words", words);
 io.on("connection", (socket) => {
   if (socket.recovered) {
     console.log("is recovered");
@@ -29,11 +31,9 @@ io.on("connection", (socket) => {
     let roomFound = false;
     // 1. 기존 방에 여유 공간 있는지 확인
     for (const roomId in rooms) {
-      console.log("rooms[roomId]", rooms[roomId]);
       if (Object.keys(rooms[roomId]).length < gameSize) {
         // 출제자 타입인 경우 방에 출제자가 없는지 체크
         if (userType === "master") {
-          console.log("join master");
           let hasSmaeType = false;
           for (const [key, value] of Object.entries(rooms[roomId])) {
             if (value.type === userType) hasSmaeType = true;
@@ -133,8 +133,10 @@ io.on("connection", (socket) => {
         io.to(roomId).emit("loading start");
         fetchWord().then((res) => {
           console.log("fetchWord res", res);
+          io.to(roomId).emit("game start", res);
+          words[roomId] = res;
         });
-        // io.to(roomId).emit("game start");
+        console.log("words", words);
       }
     }
   });
@@ -151,6 +153,7 @@ io.on("connection", (socket) => {
       const leaveUser = rooms[roomId][socket.id];
       console.log("leaveUser", leaveUser);
       delete rooms[roomId][socket.id];
+      delete words[roomId];
       console.log("leaveUser", leaveUser);
       if (Object.keys(rooms[roomId]).length === 0) {
         delete rooms[roomId]; // 빈 방 삭제
