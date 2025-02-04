@@ -141,6 +141,20 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("sendStartDrawing", (offsetX, offsetY) => {
+    console.log("sendStartDrawing offsetX", offsetX);
+    console.log("sendStartDrawing offsetY", offsetY);
+    socket.broadcast.emit("startDrawing", offsetX, offsetY);
+  });
+
+  socket.on("sendDraw", (currentColor, lineWidth, x, y) => {
+    console.log("sendDraw currentColor", currentColor);
+    console.log("sendDraw lineWidth", lineWidth);
+    console.log("sendDraw x", x);
+    console.log("sendDraw y", y);
+    socket.broadcast.emit("draw", currentColor, lineWidth, x, y);
+  });
+
   socket.on("disconnect", () => {
     console.log("disconnect socket.id:", socket.id);
     console.log("disconnect rooms", rooms);
