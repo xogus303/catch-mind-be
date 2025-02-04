@@ -49,10 +49,8 @@ const getRandomSyllable = () => {
 
 export const fetchWord = async () => {
   const randomSyllable = getRandomSyllable();
-  console.log("randomSyllable", randomSyllable);
   const inputWord = assemble(randomSyllable);
-  console.log("inputWord", inputWord);
-  const url = `https://krdict.korean.go.kr/api/search?key=9F21B891FDD74E00797612B093260716&q=${inputWord}&advanced=y&method=include`;
+  const url = `https://krdict.korean.go.kr/api/search?key=9F21B891FDD74E00797612B093260716&q=${inputWord}&advanced=y&method=include&pos=1,2,3,4,5,6,7,8,11,12,13,14&letter_e=8`;
 
   try {
     const response = await axios.get(url);
